@@ -9,9 +9,9 @@ import argparse
 from pathlib import Path
 import json
 
-from src.config import MODEL_NAME, NUM_CLASSES, CHECKPOINT_DIR, IMAGE_SIZE, MEAN, STD, DEVICE
-from src.models import get_model, load_checkpoint
-from src.data_utils import get_data_loaders
+from ..core.config import MODEL_NAME, NUM_CLASSES, CHECKPOINT_DIR, IMAGE_SIZE, MEAN, STD, DEVICE, SUPPORTED_MODELS
+from ..core.models import get_model, load_checkpoint
+from ..core.data_utils import get_data_loaders
 
 
 def load_model_for_inference(
@@ -131,10 +131,11 @@ def predict_batch(
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Food-101 Inference')
+    parser = argparse.ArgumentParser(description='Food Image Classification Inference')
     parser.add_argument('--image', type=str, help='Path to single image')
     parser.add_argument('--folder', type=str, help='Path to folder with images')
-    parser.add_argument('--model', type=str, default=MODEL_NAME, help='Model name')
+    parser.add_argument('--model', type=str, default=MODEL_NAME, choices=SUPPORTED_MODELS,
+                       help=f'Model to use. Options: {", ".join(SUPPORTED_MODELS)}')
     parser.add_argument('--checkpoint', type=str, help='Path to checkpoint file')
     parser.add_argument('--top_k', type=int, default=5, help='Number of top predictions')
     parser.add_argument('--output', type=str, help='Output JSON file path')

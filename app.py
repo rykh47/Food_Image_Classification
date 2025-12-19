@@ -10,31 +10,50 @@ import numpy as np
 from pathlib import Path
 import matplotlib.pyplot as plt
 
-from src.config import MODEL_NAME, NUM_CLASSES, CHECKPOINT_DIR, IMAGE_SIZE, MEAN, STD, DEVICE
-from src.models import get_model, load_checkpoint
-from src.data_utils import get_data_loaders
-from src.gradcam import visualize_gradcam
+from src.core.config import MODEL_NAME, NUM_CLASSES, CHECKPOINT_DIR, IMAGE_SIZE, MEAN, STD, DEVICE, SUPPORTED_MODELS
+from src.core.models import get_model, load_checkpoint
+from src.core.data_utils import get_data_loaders
+from src.core.gradcam import visualize_gradcam
 
 
 @st.cache_resource
-def load_model():
+def load_model(selected_model=MODEL_NAME):
     """Load model with caching"""
-    checkpoint_path = CHECKPOINT_DIR / f"{MODEL_NAME}_best.pth"
+    checkpoint_path = CHECKPOINT_DIR / f"{selected_model}_best.pth"
     
     if not checkpoint_path.exists():
         st.error(f"Model checkpoint not found: {checkpoint_path}")
-        st.info("Please train the model first using train_food10.py")
+        st.info(f"Please train the model first using: python train_food10.py --model {selected_model}")
         return None, None
     
-    # Get class names
-    _, _, class_names = get_data_loaders(batch_size=1)
-    
-    # Create and load model
-    model = get_model(model_name=MODEL_NAME, num_classes=NUM_CLASSES, pretrained=False)
+    # Get class names (be defensive: dataset may be missing in this environment)
+    try:
+        _, _, class_names = get_data_loaders(batch_size=1)
+    except Exception as e:
+        st.warning("Dataset not available or failed to load. Attempting to infer class names from `TRAIN_DIR`.")
+        try:
+            from src.core.config import TRAIN_DIR
+            if TRAIN_DIR.exists():
+                class_names = [p.name for p in sorted(TRAIN_DIR.iterdir()) if p.is_dir()]
+            else:
+                class_names = None
+        except Exception:
+            class_names = None
+
+    if not class_names:
+        st.error(
+            "Could not determine class names. Ensure the dataset is present under `classification_dataset/train` "
+            "or prepare the dataset using the provided scripts."
+        )
+        return None, None
+
+    # Create and load model (use actual dataset class count)
+    num_classes = len(class_names)
+    model = get_model(model_name=selected_model, num_classes=num_classes, pretrained=False)
     model = model.to(DEVICE)
     load_checkpoint(str(checkpoint_path), model, DEVICE)
     model.eval()
-    
+
     return model, class_names
 
 
@@ -67,23 +86,31 @@ def predict_image(model, image, class_names, top_k=5):
 
 def main():
     st.set_page_config(
-        page_title="Food-101 Classifier",
+        page_title="Food Classifier",
         page_icon="🍕",
         layout="wide"
     )
     
-    st.title("🍕 Food-101 Image Classification")
-    st.markdown("Classify food images into 101 categories using deep learning")
-    
-    # Load model
-    with st.spinner("Loading model..."):
-        model, class_names = load_model()
-    
-    if model is None:
-        st.stop()
+    st.title("🍕 Food Image Classification")
+    st.markdown("Classify food images using deep learning models")
     
     st.sidebar.header("Settings")
-    top_k = st.sidebar.slider("Top K predictions", 1, 10, 5)
+    
+    # Model selection dropdown
+    selected_model = st.sidebar.selectbox(
+        "Select Model",
+        options=SUPPORTED_MODELS,
+        help="Choose which trained model to use for inference"
+    )
+    
+    # Load model
+    with st.spinner(f"Loading {selected_model} model..."):
+        model, class_names = load_model(selected_model=selected_model)
+    
+    if model is None or class_names is None:
+        st.stop()
+    
+    top_k = st.sidebar.slider("Top K predictions", 1, min(10, len(class_names)), 5)
     show_gradcam = st.sidebar.checkbox("Show Grad-CAM visualization", value=False)
     
     # File uploader

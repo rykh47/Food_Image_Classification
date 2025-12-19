@@ -122,13 +122,17 @@ def get_transforms(
             transforms.Resize((image_size + 32, image_size + 32)),
             transforms.RandomCrop(image_size),
             transforms.RandomHorizontalFlip(p=0.5),
-            transforms.RandomRotation(degrees=15),
+            transforms.RandomVerticalFlip(p=0.3),  # Enhanced: vertical flip
+            transforms.RandomRotation(degrees=25),  # Enhanced: stronger rotation
+            transforms.RandomAffine(degrees=0, translate=(0.15, 0.15), scale=(0.85, 1.15)),  # Enhanced: affine transforms
             transforms.ColorJitter(
-                brightness=0.2,
-                contrast=0.2,
-                saturation=0.2,
-                hue=0.1
+                brightness=0.3,  # Enhanced: stronger jitter
+                contrast=0.3,
+                saturation=0.3,
+                hue=0.15
             ),
+            transforms.GaussianBlur(kernel_size=3, sigma=(0.1, 2.0)),  # Enhanced: blur augmentation
+            transforms.RandomAdjustSharpness(sharpness_factor=2, p=0.3),  # Enhanced: sharpness variation
             transforms.ToTensor(),
             transforms.Normalize(mean=mean, std=std),
         ])

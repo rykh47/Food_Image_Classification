@@ -15,10 +15,10 @@ from torch.optim.lr_scheduler import (
 )
 from tqdm import tqdm
 
-from src.config import *
-from src.data_utils import get_data_loaders
-from src.metrics import evaluate_model, plot_confusion_matrix, plot_per_class_f1
-from src.models import get_model, load_checkpoint
+from ..core.config import *
+from ..core.data_utils import get_data_loaders
+from ..core.metrics import evaluate_model, plot_confusion_matrix, plot_per_class_f1
+from ..core.models import get_model, load_checkpoint
 
 
 class EarlyStopping:
@@ -53,6 +53,7 @@ def train_epoch(
     optimizer: optim.Optimizer,
     device: str,
     epoch: int,
+    scaler: "torch.cuda.amp.GradScaler|None" = None,
 ) -> dict:
     """
     Train for one epoch
@@ -68,17 +69,25 @@ def train_epoch(
 
     pbar = tqdm(train_loader, desc=f"Epoch {epoch + 1}/{NUM_EPOCHS}")
     for batch_idx, (images, labels) in enumerate(pbar):
-        images = images.to(device)
-        labels = labels.to(device)
+        # Move tensors to device; use non_blocking when pin_memory is enabled
+        images = images.to(device, non_blocking=True)
+        labels = labels.to(device, non_blocking=True)
 
-        # Forward pass
+        # Forward + backward (with optional AMP)
         optimizer.zero_grad()
-        outputs = model(images)
-        loss = criterion(outputs, labels)
+        if scaler is not None:
+            with torch.cuda.amp.autocast(enabled=True):
+                outputs = model(images)
+                loss = criterion(outputs, labels)
 
-        # Backward pass
-        loss.backward()
-        optimizer.step()
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
+        else:
+            outputs = model(images)
+            loss = criterion(outputs, labels)
+            loss.backward()
+            optimizer.step()
 
         # Statistics
         running_loss += loss.item()
@@ -122,8 +131,8 @@ def validate(
 
     with torch.no_grad():
         for images, labels in tqdm(val_loader, desc="Validating"):
-            images = images.to(device)
-            labels = labels.to(device)
+            images = images.to(device, non_blocking=True)
+            labels = labels.to(device, non_blocking=True)
 
             outputs = model(images)
             loss = criterion(outputs, labels)
@@ -134,7 +143,8 @@ def validate(
             all_preds.extend(predicted.cpu().numpy())
             all_labels.extend(labels.cpu().numpy())
 
-    from metrics import compute_metrics
+    # Import compute_metrics from package module
+    from src.core.metrics import compute_metrics
     import numpy as np
 
     all_preds = np.array(all_preds)
@@ -182,10 +192,13 @@ def train():
     print(f"Epochs: {NUM_EPOCHS}")
     print("=" * 60)
 
-    # Set device
-    device = torch.device(DEVICE if torch.cuda.is_available() else "cpu")
+    # Set device (prefer CUDA when available)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     if device.type == "cpu":
         print("Warning: CUDA not available, using CPU")
+    else:
+        # Enable cuDNN autotuner to select best algorithms for your hardware
+        torch.backends.cudnn.benchmark = True
 
     # Load data
     print("\nLoading data...")
@@ -206,8 +219,12 @@ def train():
     )
     model = model.to(device)
 
+    # Enable mixed precision when using CUDA
+    use_amp = device.type == "cuda"
+    scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
+
     # Loss and optimizer
-    criterion = nn.CrossEntropyLoss()
+    criterion = nn.CrossEntropyLoss(label_smoothing=0.1)  # Enhanced: label smoothing to prevent overconfidence
     optimizer = optim.AdamW(
         model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY
     )
@@ -262,9 +279,9 @@ def train():
     for epoch in range(start_epoch, NUM_EPOCHS):
         epoch_start = time.time()
 
-        # Train
+        # Train (pass GradScaler for mixed precision when available)
         train_metrics = train_epoch(
-            model, train_loader, criterion, optimizer, device, epoch
+            model, train_loader, criterion, optimizer, device, epoch, scaler
         )
 
         # Validate
@@ -411,6 +428,23 @@ def train():
 
 
 if __name__ == "__main__":
+    import argparse
+    
+    parser = argparse.ArgumentParser(description="Train Food Classification Model")
+    parser.add_argument("--model", type=str, default=MODEL_NAME, choices=SUPPORTED_MODELS,
+                       help=f"Model architecture to train. Options: {', '.join(SUPPORTED_MODELS)}")
+    parser.add_argument("--epochs", type=int, default=NUM_EPOCHS, help="Number of training epochs")
+    parser.add_argument("--batch-size", type=int, default=BATCH_SIZE, help="Batch size")
+    parser.add_argument("--lr", type=float, default=LEARNING_RATE, help="Learning rate")
+    
+    args = parser.parse_args()
+
+    # Override this script's globals with CLI arguments
+    MODEL_NAME = args.model
+    NUM_EPOCHS = args.epochs
+    BATCH_SIZE = args.batch_size
+    LEARNING_RATE = args.lr
+
     train()
 
 

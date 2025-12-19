@@ -11,6 +11,7 @@ from typing import Tuple, Optional
 
 from .config import RESULTS_DIR, MEAN, STD
 
+DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 class GradCAM:
     """
@@ -46,6 +47,8 @@ class GradCAM:
         input_image: torch.Tensor,
         target_class: Optional[int] = None
     ) -> np.ndarray:
+        device = input_image.device
+        self.model = self.model.to(device)
         """
         Generate Grad-CAM heatmap
         
@@ -57,7 +60,6 @@ class GradCAM:
             CAM heatmap as numpy array
         """
         self.model.eval()
-        
         # Forward pass
         output = self.model(input_image)
         
@@ -77,7 +79,11 @@ class GradCAM:
         weights = torch.mean(gradients, dim=(1, 2))  # (C,)
         
         # Weighted combination of activation maps
-        cam = torch.zeros(activations.shape[1:], dtype=torch.float32)
+        cam = torch.zeros(
+            activations.shape[1:], 
+            dtype=torch.float32, 
+            device=activations.device
+        )
         for i, w in enumerate(weights):
             cam += w * activations[i, :, :]
         
@@ -94,7 +100,7 @@ def visualize_gradcam(
     model: torch.nn.Module,
     image_path: str,
     class_names: list,
-    device: str = "cpu",
+    device: str = DEVICE,
     save_path: Optional[Path] = None
 ) -> None:
     """
