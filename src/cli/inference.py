@@ -3,6 +3,7 @@ Inference script for Food-10 classification
 """
 import torch
 import torch.nn.functional as F
+import matplotlib.pyplot as plt
 from torchvision import transforms
 from PIL import Image
 import argparse
@@ -96,7 +97,29 @@ def predict_image(
         'predicted_class': predictions[0]['class'],
         'confidence': predictions[0]['confidence']
     }
+def save_inference_image(image_path, result, model_name, output_path):
+    image = Image.open(image_path).convert("RGB")
 
+    title = (
+        f"{model_name} Prediction\n"
+        f"Predicted: {result['predicted_class']} "
+        f"({result['confidence']*100:.2f}%)"
+    )
+
+    plt.figure(figsize=(5, 5))
+    plt.imshow(image)
+    plt.axis("off")
+    plt.title(title)
+
+    text = "\n".join([
+        f"{i+1}. {p['class']} ({p['confidence']*100:.2f}%)"
+        for i, p in enumerate(result['predictions'])
+    ])
+
+    plt.figtext(0.5, 0.01, text, ha="center", fontsize=10)
+    plt.tight_layout()
+    plt.savefig(output_path, dpi=300)
+    plt.close()
 
 def predict_batch(
     model: torch.nn.Module,
@@ -169,6 +192,14 @@ def main():
     if len(image_paths) == 1:
         print(f"\nPredicting: {image_paths[0]}")
         result = predict_image(model, image_paths[0], class_names, top_k=args.top_k)
+        image_output = f"{args.model}_inference.png"
+        save_inference_image(
+            image_paths[0],
+            result,
+            args.model,
+            image_output
+            )
+        print(f"Inference image saved as {image_output}")
         print(f"\nPredicted: {result['predicted_class']} ({result['confidence']:.2%})")
         print(f"\nTop {args.top_k} predictions:")
         for i, pred in enumerate(result['predictions'], 1):

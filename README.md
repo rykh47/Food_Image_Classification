@@ -22,24 +22,67 @@ The dataset is automatically downloaded and organized into `data/food-10/train|t
 ## 🗂️ Project Structure
 
 ```
-Food Image Classification/
+Food_Image_Classification/
+│
+├── README.md
+│   High-level overview of the project, setup instructions, and usage details.
+│
+├── requirements.txt
+│   Lists all Python dependencies required to run the project.
+│
+├── app.py
+│   Streamlit-based web application for food image classification.
+│
+├── classification_dataset/
+│   ├── train/
+│   │   Training images organized into class-specific folders.
+│   └── test/
+│       Testing images organized into class-specific folders.
+│
 ├── src/
-│   ├── __init__.py
-│   ├── config.py          # Paths, hyperparams, Kaggle slug
-│   ├── data_utils.py      # Kaggle download + DataLoader helpers
-│   ├── models.py          # Transfer-learning backbones
-│   ├── metrics.py         # Macro F1 + plotting utilities
-│   └── gradcam.py         # Grad-CAM implementation
-├── train_food10.py        # Training loop (imports modules from src/)
-├── eda.py                 # Dataset exploration workflow
-├── inference.py           # CLI inference (single image or folder)
-├── app.py                 # Streamlit demo with optional Grad-CAM overlay
-├── REPORT.md              # Short write-up template with slots for results
-├── requirements.txt       # Python dependencies
-├── README.md              # (this file)
-├── checkpoints/           # Saved weights (created after training)
-├── results/               # Plots, metrics JSON, Grad-CAM outputs
-└── data/food-10/          # Train/test folders (created automatically)
+│   ├── core/
+│   │   Contains core machine learning logic and reusable modules.
+│   │   ├── config.py
+│   │   ├── data_utils.py
+│   │   ├── models.py
+│   │   ├── metrics.py
+│   │   └── gradcam.py
+│   │
+│   ├── cli/
+│   │   Contains command-line scripts for training and evaluation.
+│   │   ├── train_food10.py
+│   │   ├── train_all_models.py
+│   │   ├── inference.py
+│   │   ├── eda.py
+│   │   ├── convert_to_torchscript.py
+│   │   └── quickstart.py
+│   │
+│   ├── checkpoints/
+│   │   Stores trained model weights.
+│   │   ├── resnet50_best.pth
+│   │   ├── efficientnet_b0_best.pth
+│   │   └── densenet121_best.pth
+│   │
+│   ├── models_torchscript/
+│   │   Deployment-ready TorchScript models.
+│   │   ├── resnet50.pt
+│   │   ├── efficientnet_b0.pt
+│   │   └── densenet121.pt
+│   │
+│   └── results/
+│       Stores experimental outputs and evaluation results.
+│       ├── *_training_history.png
+│       ├── *_confusion_matrix.png
+│       ├── *_per_class_f1.png
+│       └── *_results.json
+│
+├── tests/
+│   ├── test_all_models.py
+│   └── e2e_test.py
+│
+└── docs/
+    Contains additional project documentation and summaries.
+
 ```
 
 ---
